@@ -25,13 +25,16 @@ local_rounds = 1
 train_batch_size = 128
 test_batch_size = 256
 
+learning_rate = 0.01
+download = False
+
 if __name__ == "__main__":
     # download and initialize dataset
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,)),
     ])
-    dataset = MNIST(root=dataset_root, train=True, transform=transform, target_transform=None, download=False)
+    dataset = MNIST(root=dataset_root, train=True, transform=transform, target_transform=None, download=download)
 
 
     # data split
@@ -46,7 +49,7 @@ if __name__ == "__main__":
             train=False,
             transform=transform,
             target_transform=None,
-            download=False),
+            download=download),
         batch_size=test_batch_size,
         shuffle=True,
         num_workers=0
@@ -78,7 +81,7 @@ if __name__ == "__main__":
     for epoch in range(1, total_rounds+1):
         client.local_train_step(
             model=model, loss_func=loss_func, optimizer=optimizer, 
-            batch_size=train_batch_size, local_rounds=1, num_workers=0, lr=0.01)
+            batch_size=train_batch_size, local_rounds=1, num_workers=0, lr=learning_rate)
         acc = client.evaluate_accuracy(data_iter=test_iter, model=model, device='cuda')
         print("epoch-%d accuracy=%.3f"%(epoch, acc))
 
@@ -100,7 +103,7 @@ if __name__ == "__main__":
             weight_list.append(
                 client.local_train_step(
                     model=model, loss_func=loss_func, optimizer=optimizer,
-                    local_rounds=local_rounds, batch_size=train_batch_size, num_workers=0, lr=0.01)
+                    local_rounds=local_rounds, batch_size=train_batch_size, num_workers=0, lr=learning_rate)
             )
 
         #     print(

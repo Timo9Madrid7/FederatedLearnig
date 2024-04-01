@@ -1,5 +1,4 @@
 from typing import List
-from abc import abstractmethod
 from torch.utils.data import DataLoader
 
 import torch
