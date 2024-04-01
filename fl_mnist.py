@@ -11,6 +11,7 @@ import torch
 from random import sample
 
 from utils.dataset import FLClientDataset
+from utils.drawer import Plot2D
 
 dataset_root = "./datasets/"
 
@@ -20,7 +21,7 @@ non_iid_ratio = 0.1
 client_sel_ratio = 0.4
 
 num_of_test_data = 10000
-total_rounds = 50
+total_rounds = 100
 local_rounds = 1
 train_batch_size = 128
 test_batch_size = 256
@@ -74,19 +75,35 @@ if __name__ == "__main__":
     server = Server(model_structure=model_structure)
     server.set_weights(weights=init_weights)
 
+    
+    # initialize plot2D for plotting accuracy and loss
+    plot2D = Plot2D()
+    x_axis = list(range(1, total_rounds + 1))
+    plot_prefix = "./result/" + __file__.split('/')[-1].split('.')[0]
+ 
 
     # locally alone training
+    alone_loss_history = []
+    alone_accuracy_history = []
     client = clients[0]
     client.set_weights(server.get_weights())
     for epoch in range(1, total_rounds+1):
-        client.local_train_step(
+        _, client_loss = client.local_train_step(
             model=model, loss_func=loss_func, optimizer=optimizer, 
             batch_size=train_batch_size, local_rounds=1, num_workers=0, lr=learning_rate)
         acc = client.evaluate_accuracy(data_iter=test_iter, model=model, device='cuda')
         print("epoch-%d accuracy=%.3f"%(epoch, acc))
+        alone_loss_history.append(client_loss)
+        alone_accuracy_history.append(acc)
+
+    plot2D.plot([x_axis], [alone_loss_history], plot_prefix + "_alone_loss.png", nrows=1, ncols=1, xlabel="round", ylabel="loss")
+    plot2D.plot([x_axis], [alone_accuracy_history], plot_prefix + "_alone_accuracy.png", nrows=1, ncols=1, xlabel="round", ylabel="accuracy")
 
 
     # fl training
+    client_x_axis = [[] for _ in range(10)]
+    fl_loss_history = [[] for _ in range(10)]  # record only for first 10 clients
+    fl_acc_history = []                        # record the global accuracy
     for epoch in range(1, total_rounds+1):
 
         # print("epoch:", epoch, "| gpu memory occupied:%.2f"%(torch.cuda.memory_allocated()/1024**3))
@@ -100,11 +117,15 @@ if __name__ == "__main__":
             
             client.set_weights(server.get_weights())
 
-            weight_list.append(
-                client.local_train_step(
-                    model=model, loss_func=loss_func, optimizer=optimizer,
-                    local_rounds=local_rounds, batch_size=train_batch_size, num_workers=0, lr=learning_rate)
-            )
+            client_weights, client_loss =  client.local_train_step(
+                model=model, loss_func=loss_func, optimizer=optimizer,
+                local_rounds=local_rounds, batch_size=train_batch_size, num_workers=0, lr=learning_rate)
+
+            weight_list.append(client_weights)
+
+            if 0 <= cid < 10:
+                client_x_axis[cid].append(epoch)
+                fl_loss_history[cid].append(client_loss)
 
         #     print(
         #         cid, client.evaluate_accuracy(test_iter, model, "cuda"), end="|"
@@ -112,6 +133,9 @@ if __name__ == "__main__":
         # print()
 
         agg_weights = server.naive_aggregation(weight_list=weight_list)
-        print(
-            "server accuracy = %.3f"%server.evaluate_accuracy(test_iter, model, "cuda")
-        )
+        acc = server.evaluate_accuracy(test_iter, model, "cuda")
+        print("epoch-%d accuracy=%.3f"%(epoch, acc))
+        fl_acc_history.append(acc)
+
+    plot2D.plot(client_x_axis, fl_loss_history, plot_prefix + "_fl_loss.png", nrows=2, ncols=5, xlabel="round", ylabel="loss")
+    plot2D.plot([x_axis], [fl_acc_history], plot_prefix + "_fl_accuracy.png", nrows=1, ncols=1, xlabel="round", ylabel="accuracy")

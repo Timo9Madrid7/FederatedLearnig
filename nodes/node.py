@@ -10,10 +10,10 @@ class Node:
         self.model_structure = model_structure
         self.weights = None
     
-    def get_weights(self) -> List[int]:
+    def get_weights(self) -> List[float]:
         return self.weights
     
-    def set_weights(self, weights: List[int]) -> None:
+    def set_weights(self, weights: List[float]) -> None:
         self.weights = weights
 
     def evaluate_accuracy(self, data_iter: DataLoader, model: torch.nn.Module, device: str=None) -> float:
