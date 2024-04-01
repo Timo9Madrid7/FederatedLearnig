@@ -1,46 +1,62 @@
-from typing import Tuple, List, Any
-from typing_extensions import override
-from torchvision.datasets import MNIST
+from torch.utils.data.dataset import Dataset
 from collections import defaultdict
+from torch.utils.data import Subset
+from numpy.random import RandomState
+from typing import List
 
-from utils.helper import fl_getitem
+class FLClientDataset():
+    def __init__(self, dataset: Dataset, num_clients: int, num_sample_per_client: int, non_iid_ratio: int, unique_sample_sharing: bool=True, *args, **kwargs) -> None:
+        self.num_clients = num_clients
+        self.num_sample_per_client = num_sample_per_client
+        self.non_iid_ratio = non_iid_ratio
+        self.unique_sample_sharing = unique_sample_sharing
 
-class FLMNIST(MNIST):
+        self.dataset = dataset
+        self.args = args
+        self.kwargs = kwargs
 
-    def __init__(self, root: str, train: bool = True, transform = None, target_transform = None, download: bool = False, data_ids: list = range(60000)) -> None:
-        super().__init__(root, train, transform, target_transform, download)
+        self.__client_sample_id__ = [[] for _ in range(self.num_clients)]
+        self.__share_data__(self.kwargs['shuffle'], self.kwargs['random_state'])
 
-        self.data_ids = data_ids
 
-    @override
-    def __len__(self):
-        return len(self.data_ids)
-
-    @override
-    @fl_getitem
-    def __getitem__(self, index: int) -> Tuple[Any, Any]:
-        return super().__getitem__(index)
-    
-def mnist_data_split(root: str, num_client: int, num_data_per_client: int, non_iid_ratio: int=0.1) -> List[List[int]]:
-    assert num_client * num_data_per_client <= 60000
-    
-    dataset = FLMNIST(root=root, train=True, download=False)
-
-    indices_by_class = defaultdict(list)
-    for _ids in dataset.data_ids:
-        indices_by_class[dataset.__getitem__(_ids)[1]].append(_ids)
-
-    main_class_number = int(num_data_per_client * non_iid_ratio)
-    other_class_number = (num_data_per_client - main_class_number) // 9
-
-    res = [[] for _ in range(num_client)]
-    p = [0 for _ in range(10)]
-    for client_id in range(num_client):
-        for i in range(10):
-            num_data = main_class_number if client_id % 10 == i else other_class_number
-            res[client_id] += indices_by_class[i][p[i] : p[i] + num_data]
-            p[i] += num_data
-
-    return res
-
+    def __share_data__(self, shuffle: bool=True, random_state: int=215):
+        if self.unique_sample_sharing and self.num_clients * self.num_sample_per_client > len(self.dataset):
+            raise IndexError("No enough samples for splitting")
         
+        indices_by_class = defaultdict(list)
+        for idx, (_, y) in enumerate(self.dataset):
+            indices_by_class[y].append(idx)
+        num_classes = len(indices_by_class)
+
+        random = RandomState(random_state)
+        if shuffle:
+            for class_id in indices_by_class.keys():
+                random.shuffle(indices_by_class[class_id])            
+        
+        main_class_number = int(self.num_sample_per_client * self.non_iid_ratio)
+        other_class_number = (self.num_sample_per_client - main_class_number) // (num_classes - 1)
+
+        if self.unique_sample_sharing:
+            p = [0 for _ in range(num_classes)]
+            for client_id in range(self.num_clients):
+                for class_id in indices_by_class.keys():
+                    num_data = main_class_number if client_id % num_classes == class_id else other_class_number
+                    self.__client_sample_id__[client_id].extend(indices_by_class[class_id][p[class_id] : p[class_id] + num_data])
+                    p[class_id] += num_data
+        
+        else:
+            try:
+                for client_id in range(self.num_clients):
+                    for class_id in indices_by_class.keys():
+                        num_data = main_class_number if client_id % num_classes == class_id else other_class_number
+                        self.__client_sample_id__[client_id].extend(random.choice(indices_by_class[class_id], num_data, replace=False).tolist())
+            except ValueError:
+                raise IndexError("No enough samples for splitting")
+            
+
+    def getClientDataset(self, idx: int) -> Subset:
+        return Subset(self.dataset, self.__client_sample_id__[idx])
+    
+    
+    def getClientSampleId(self, idx: int) -> List[int]:
+        return self.__client_sample_id__[idx]

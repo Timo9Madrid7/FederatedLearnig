@@ -14,17 +14,15 @@ class Client(Node):
         self.device = device
     
     def local_train_step(self, model: torch.nn.Module, loss_func: torch.nn.Module, optimizer: torch.optim.Optimizer, batch_size: int, local_rounds: int = 1, num_workers: int = 0, **optimizer_settings) -> List[int]:
-        
-        # model loads
+        # model loading
         for layer, param in enumerate(model.parameters(), 1):
             param.data = torch.tensor(self.weights[self.model_structure[layer-1]:self.model_structure[layer]]).view(param.data.size())
-
         model = model.to(self.device)
-
+        
+        # optimizer configuration
         model_optimizer: torch.optim.Optimizer = optimizer(model.parameters(), **optimizer_settings)
 
-
-        # data loads
+        # data loading
         dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
         # train step
