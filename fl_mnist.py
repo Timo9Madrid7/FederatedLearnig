@@ -12,8 +12,12 @@ from random import sample
 
 from utils.dataset import FLClientDataset
 from utils.drawer import Plot2D
+from utils.model import save_model_state_dict
+from utils.timer import get_timestamp
 
 dataset_root = "./datasets/"
+model_checkpoint = None
+timestamp = get_timestamp()
 
 num_client = 100
 num_sample_per_client = 512
@@ -59,6 +63,8 @@ if __name__ == "__main__":
 
     # initialize clients and server
     model = LeNet()
+    if model_checkpoint:
+        model.load_state_dict(torch.load(model_checkpoint))
     model_structure = [0]
     init_weights = []
     for param in model.parameters():
@@ -79,7 +85,7 @@ if __name__ == "__main__":
     # initialize plot2D for plotting accuracy and loss
     plot2D = Plot2D()
     x_axis = list(range(1, total_rounds + 1))
-    plot_prefix = "./result/" + __file__.split('/')[-1].split('.')[0]
+    plot_prefix = f"./result/{timestamp}/" + __file__.split('/')[-1].split('.')[0]
  
 
     # locally alone training
@@ -137,5 +143,7 @@ if __name__ == "__main__":
         print("epoch-%d accuracy=%.3f"%(epoch, acc))
         fl_acc_history.append(acc)
 
-    plot2D.plot(client_x_axis, fl_loss_history, plot_prefix + "_fl_loss.png", nrows=2, ncols=5, xlabel="round", ylabel="loss")
+    plot2D.plot(client_x_axis, fl_loss_history, plot_prefix + "_fl_loss.png", figsize=[10, 5], nrows=2, ncols=5, xlabel="round", ylabel="loss")
     plot2D.plot([x_axis], [fl_acc_history], plot_prefix + "_fl_accuracy.png", nrows=1, ncols=1, xlabel="round", ylabel="accuracy")
+    
+    save_model_state_dict(model, f"./models/checkpoint/{timestamp}/" + __file__.split('/')[-1].split('.')[0])
