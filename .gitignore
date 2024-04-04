@@ -152,5 +152,5 @@ cython_debug/
 #.idea/
 *.gz
 datasets/*
-test.*
+*test*
 models/checkpoint
