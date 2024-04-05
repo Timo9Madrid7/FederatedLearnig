@@ -1,4 +1,4 @@
-from typing import Union, Optional, List, Dict, Set
+from typing import Union, Optional, List, Dict, Set, Tuple
 import numpy as np
 from collections import deque
 import heapq
@@ -57,10 +57,10 @@ class QuickSort:
 
 
 class MSTBuilder:
-    def prims(self, graph: np.ndarray, start: int = 0) -> Dict[int, int]:
+    def prims(self, graph: Union[np.ndarray, List], start: int = 0) -> Dict[int, int]:
         visited = set()
         parent: Dict[int, int] = {}
-        distance_to_tree: Dict[int, float] = {vertex: float('inf') for vertex in range(graph.shape[0])}
+        distance_to_tree: Dict[int, float] = {vertex: float('inf') for vertex in range(len(graph))}
         distance_to_tree[start] = 0
         queue = [(distance_to_tree[start], start)]
 
@@ -76,7 +76,7 @@ class MSTBuilder:
                     parent[u] = v
                     heapq.heappush(queue, (dist, u))
             
-            if len(visited) == graph.shape[0]:
+            if len(visited) == len(graph):
                 break
 
         return parent
@@ -144,6 +144,85 @@ class SLTBuilder():
 
         linkage.reverse()
         return linkage
+    
+
+class CondenseTreeNode:
+    def __init__(self) -> None:
+        self.parent: CondenseTreeNode = None
+        self.left: CondenseTreeNode = None
+        self.right: CondenseTreeNode = None
+        self.lambda_p: Dict[int, float] = {}
+        self.lambda_birth: float = None
+        self.level: int = 0
+        self.stability_value: float = None
+    
+    @property
+    def stability(self) -> float:
+        if not self.stability_value is None:
+            return self.stability_value
+        self.stability_value = 0
+        for _, p in self.lambda_p.items():
+            self.stability_value += p - self.lambda_birth
+        return self.stability_value
+    
+    def set_stability(self, stability) -> None:
+        self.stability_value = stability
+    
+    def __lt__(self, other) -> bool:
+        if isinstance(other, CondenseTreeNode):
+            return self.level < other.level
+        else:
+            raise TypeError
+
+class CTBuilder:
+    def __init__(self) -> None:
+        self.root: CondenseTreeNode = CondenseTreeNode()
+        self.leaves: List[CondenseTreeNode] = []
+        self.selected: Set[CondenseTreeNode] = set()
+
+    def condenseSLT(self, slt_root: SingleLinkageTreeNode, min_cluster_size: int) -> None:
+        self.root.lambda_birth = 0
+        self.root.level = 0
+
+        def dfs(ct_node: CondenseTreeNode = self.root, slt_node: SingleLinkageTreeNode = slt_root) -> None:
+            reciprocal_distance = 1 / slt_node.distance
+            
+            if len(slt_node.left.points) >= min_cluster_size and len(slt_node.right.points) >= min_cluster_size:
+                # splitting into two sub clusters
+                for point in slt_node.points:
+                    ct_node.lambda_p[point] = reciprocal_distance
+                
+                ct_node.left, ct_node.right = CondenseTreeNode(), CondenseTreeNode()
+                ct_node.left.parent, ct_node.right.parent = ct_node, ct_node
+                ct_node.left.lambda_birth, ct_node.right.lambda_birth = reciprocal_distance, reciprocal_distance
+                ct_node.left.level, ct_node.right.level = ct_node.level - 1, ct_node.level - 1
+
+                dfs(ct_node.left, slt_node.left)
+                dfs(ct_node.right, slt_node.right)
+
+            elif len(slt_node.left.points) < min_cluster_size and len(slt_node.right.points) >= min_cluster_size:
+                # falling points from left
+                for point in slt_node.left.points:
+                    ct_node.lambda_p[point] = reciprocal_distance
+        
+                dfs(ct_node, slt_node.right)
+
+            elif len(slt_node.left.points) >= min_cluster_size and len(slt_node.right.points) < min_cluster_size:
+                # falling points from right
+                for point in slt_node.right.points:
+                    ct_node.lambda_p[point] = reciprocal_distance
+                
+                dfs(ct_node, slt_node.left)
+
+            else:
+                # death node, recorded as a leaf
+                for point in slt_node.points:
+                    ct_node.lambda_p[point] = reciprocal_distance
+                
+                heapq.heappush(self.leaves, ct_node)
+                self.selected.add(ct_node)
+
+        dfs(self.root, slt_root)
 
 
 
