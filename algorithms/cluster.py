@@ -6,6 +6,7 @@ except ImportError:
     from utils import QuickSort, MSTBuilder, SLTBuilder, SingleLinkageTreeNode, CTBuilder, CondenseTreeNode
 import heapq
 from scipy.cluster.hierarchy import dendrogram
+from hdbscan.plots import SingleLinkageTree as Dendrogram
 import matplotlib.pyplot as plt
 
 
@@ -150,10 +151,11 @@ class HDBSCAN:
         return self.labels_
 
 
-    def dendrogram(self) -> Dict[str, Any]:
-        color_dict = dendrogram(self._linkage_)
+    def dendrogram(self) -> None:
+        # color_dict = dendrogram(self._linkage_)
+        plot = Dendrogram(self._linkage_)
+        plot.plot()
         plt.show()
-        return color_dict
 
 
 
