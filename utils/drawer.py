@@ -1,7 +1,12 @@
 import matplotlib.pyplot as plt
 from math import sqrt, ceil
-from typing import List
+from typing import List, Tuple, Optional
+from torch import Tensor
+from torchvision.utils import make_grid
+from torchvision.transforms import ToPILImage
+from PIL import Image
 from numpy import ndarray
+from natsort import natsorted
 import os
 
 class Plot2D:
@@ -47,3 +52,28 @@ class Plot2D:
             axes[i].text(-5, y[-1], '%.2f'%y[-1], va='center', ha='right', color='r')
         
         plt.savefig(savepath, dpi=dpi)
+
+
+class TensorToImage:
+    def __init__(self, image_size: Tuple[int], mode: Optional[str]="RGB") -> None:
+        self._image_size_ = image_size
+        self._mode_ = mode
+        self.__toPILImage__ = ToPILImage(mode=self._mode_)
+
+    def convert(self, tensor: Tensor, n_samples: int = 30, n_rows: int = 6) -> Image:
+        image_tensor = tensor if tensor.device.type == 'cpu' else tensor.detach().cpu()
+        image_tensor = image_tensor.view(-1, *self._image_size_)[:n_samples]
+        image_grid = make_grid(image_tensor, nrow=n_rows).squeeze()
+        return self.__toPILImage__(image_grid)
+    
+    def toGIF(self, path: str, remove_cache: bool=True, **kwargs):
+        for root, dirs, files in os.walk(path):
+            pass
+        gif = [Image.open(path + file) for file in natsorted(files)]
+        gif[0].save(path + "merged.gif", save_all=True, append_images=gif[1:], **kwargs)
+
+        if remove_cache:
+            for root, dirs, files in os.walk(path):
+                for file in files:
+                    if file.endswith('.png'):
+                        os.remove(os.path.join(root + file))
