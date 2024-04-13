@@ -17,7 +17,6 @@ learning_rate = 0.0002
 device = 'cuda'
 n_epochs = 100
 
-
 ndf, ngf, nc, nz = 32, 32, 1, 100
 image_size = (1, 28, 28)
 mode = None
@@ -43,7 +42,7 @@ if __name__ == "__main__":
     converter = TensorToImage(image_size=image_size, mode=mode)
     path = f"./result/{timestamp}/"
     makedirs(name=path, exist_ok=True)
-    converter_config = {"n_samples": 30, "n_rows": 6, "path": path}
+    converter_config = {"noise": torch.randn(30, 100, 1, 1, device=device), "n_samples": 30, "n_rows": 6, "path": path}
 
     ganTrainer = GANTrainer(dNet=dNet, gNet=gNet, dOptim=dOptim, gOptim=gOptim, criterion=criterion)
     ganTrainer.train(dataloader=dataloader, n_epochs=n_epochs, noise_dim=nz, verbose=True, converter=converter, **converter_config)
