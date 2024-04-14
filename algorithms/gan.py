@@ -1,6 +1,7 @@
 import torch
 from torch.nn.modules import Module
-from torch.optim.optimizer import Optimizer as Optimizer
+from torch.optim.optimizer import Optimizer
+from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.data import DataLoader
 from torchsummary import summary, ModelStatistics
 from typing import Tuple, List, Optional
@@ -87,10 +88,12 @@ class GANTrainer:
 
 
 class cGANTrainer(GANTrainer):
-    def __init__(self, dNet: Module, gNet: Module, dOptim: Optimizer, gOptim: Optimizer, criterion: Module, num_class: int, image_size: int) -> None:
+    def __init__(self, dNet: Module, gNet: Module, dOptim: Optimizer, gOptim: Optimizer, dLrScheduler: Optional[LRScheduler], gLrScheduler: Optional[LRScheduler], criterion: Module, num_class: int, image_size: int) -> None:
         super().__init__(dNet, gNet, dOptim, gOptim, criterion)
         self._num_class_ = num_class
         self._image_size_ = image_size
+        self._dLrScheduler_ = dLrScheduler 
+        self._gLrScheduler_ = gLrScheduler
 
         self._g_onehot_ = torch.zeros(self._num_class_, self._num_class_, 1, 1)
         self._g_onehot_ = self._g_onehot_.scatter_(dim=1, index=torch.arange(self._num_class_).view(self._num_class_, 1, 1, 1), value=1.)
@@ -154,9 +157,14 @@ class cGANTrainer(GANTrainer):
 
                 d_loss += self.__train_discriminator__(real_samples=real_samples, real_labels=real_labels, noise_dim=noise_dim)
                 g_loss += self.__train_generator__(batch_size=batch_size, noise_dim=noise_dim)
+            
+            if isinstance(self._dLrScheduler_, LRScheduler):
+                self._dLrScheduler_.step()
+            if isinstance(self._gLrScheduler_, LRScheduler):
+                self._gLrScheduler_.step()
 
             if verbose:
-                print("epoch: [%d/%d] | d_loss: %.3f | g_loss: %.3f"%(epoch, n_epochs, d_loss / n_steps, g_loss / n_steps))
+                print("epoch: [%d/%d] | d_loss: %.3f | g_loss: %.3f | next[10^3] d_lr: %f | g_lr: %f"%(epoch, n_epochs, d_loss / n_steps, g_loss / n_steps, self._dLrScheduler_.get_last_lr()[0] * 1e3, self._gLrScheduler_.get_last_lr()[0] * 1e3))
                 d_loss, g_loss = 0., 0.
 
             if converter:
