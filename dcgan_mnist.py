@@ -6,6 +6,7 @@ from torchvision.datasets import MNIST
 from torchvision import transforms
 from utils.timer import get_timestamp
 from utils.drawer import TensorToImage
+from utils.model import init_conv_weights
 from os import makedirs
 
 dataset_root = "./datasets/"
@@ -25,7 +26,7 @@ if __name__ == "__main__":
     dataloader = DataLoader(
         MNIST("./datasets", train=True, download=download, transform=transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(mean=(0.1307, ), std=(0.3081, ))])),
+            transforms.Normalize(mean=(0.5, ), std=(0.5, ))])),
         batch_size=batch_size,
         shuffle=True,
         num_workers=0
@@ -33,6 +34,8 @@ if __name__ == "__main__":
 
     dNet = DCDiscriminator(ndf=ndf, nc=nc).to(device=device)
     gNet = DCGenerator(nz=nz, ngf=ngf, nc=nc).to(device=device)
+    init_conv_weights(dNet)
+    init_conv_weights(gNet)
 
     dOptim = torch.optim.Adam(dNet.parameters(), lr=learning_rate)
     gOptim = torch.optim.Adam(gNet.parameters(), lr=learning_rate)
