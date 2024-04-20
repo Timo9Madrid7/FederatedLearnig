@@ -66,11 +66,11 @@ class TensorToImage:
         image_grid = make_grid(image_tensor, nrow=n_rows).squeeze()
         return self.__toPILImage__(image_grid)
     
-    def toGIF(self, path: str, remove_cache: bool=True, **kwargs):
+    def toGIF(self, path: str, remove_cache: bool=True, gif_name: str="merged", **kwargs):
         for root, dirs, files in os.walk(path):
             pass
         gif = [Image.open(path + file) for file in natsorted(files)]
-        gif[0].save(path + "merged.gif", save_all=True, append_images=gif[1:], **kwargs)
+        gif[0].save(path + f"{gif_name}.gif", save_all=True, append_images=gif[1:], **kwargs)
 
         if remove_cache:
             for root, dirs, files in os.walk(path):
