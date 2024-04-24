@@ -21,10 +21,10 @@ timestamp = get_timestamp()
 
 num_client = 100
 num_sample_per_client = 512
-non_iid_ratio = 0.9
+non_iid_ratio = 0.1
 client_sel_ratio = 0.4
 
-total_rounds = 100
+total_rounds = 200
 local_rounds = 1
 train_batch_size = 64
 learning_rate = 0.0002
@@ -35,6 +35,8 @@ num_workers = 0
 ndf, ngf, nc, nz = 32, 32, 1, 100
 image_size = 28
 mode = None
+
+standalone_compare = False
 
 if __name__ == '__main__':
     # visualization tool initialization
@@ -79,55 +81,90 @@ if __name__ == '__main__':
     server.set_weights(weights=init_weights)
 
     ### Standalone Training ###
-    client = clients[0]
-    client.set_weights(server.get_weights())
-    for epoch in range(1, 10 * total_rounds + 1):
-        _, _, dloss, gloss = client.local_train_step(
-            model=model, loss_func=loss_func, optimizer=optimizer,
-            batch_size=train_batch_size, num_workers=num_workers,
-            lr=learning_rate, betas=betas,
-        )
+    if standalone_compare:
+        client = clients[0]
+        client.set_weights(server.get_weights())
+        for epoch in range(1, 10 * total_rounds + 1):
+            _, _, _, _, dloss, gloss = client.local_train_step(
+                model=model, loss_func=loss_func, optimizer=optimizer,
+                batch_size=train_batch_size, num_workers=num_workers,
+                lr=learning_rate, betas=betas,
+            )
 
-        print("epoch: [%d/%d] | d_loss: %.3f | g_loss: %.3f"%(epoch, 10 * total_rounds, dloss, gloss))
-        
-        # visualization
-        if epoch % 10 == 0:
-            with torch.no_grad():
-                model['g'] = model['g'].to(device)
-                gen_samples = model['g'](fixed_noise)
-            img = tensor2img.convert(gen_samples, gen_samples.shape[0], 10)
-            img.save(path + f"epoch_{epoch}.png")
-    tensor2img.toGIF(path, remove_cache=True, gif_name="standalone", fps=1, loop=1)
+            print("epoch: [%d/%d] | d_loss: %.3f | g_loss: %.3f"%(epoch, 10 * total_rounds, dloss, gloss))
+            
+            # visualization
+            if epoch % 10 == 0:
+                with torch.no_grad():
+                    model['g'] = model['g'].to(device)
+                    gen_samples = model['g'](fixed_noise)
+                img = tensor2img.convert(gen_samples, gen_samples.shape[0], 10)
+                img.save(path + f"epoch_{epoch}.png")
+        tensor2img.toGIF(path, remove_cache=True, gif_name="standalone", fps=1, loop=1)
     ########################################################################################################
     
 
-    ### Federated Training ###
+    ### Federated Training TYPE 1 ###
     for epoch in range(1, total_rounds + 1):
         sel_clients = sample(range(num_client), int(client_sel_ratio * num_client))
 
-        dweight_list, gweight_list, dloss_sum, gloss_sum = [], [], 0., 0.
+        dweight_list, gweight_list, dgrad_list, ggard_list, dloss_sum, gloss_sum = [], [], [], [], 0., 0.
         for cid, client in enumerate(clients):
             if cid not in sel_clients:
                 continue
             
             client.set_weights(server.get_weights())
 
-            client_dweight, client_gweight, client_dloss, client_gloss = client.local_train_step(
+            client_dweight, client_gweight, client_dgrad, client_ggrad, client_dloss, client_gloss = client.local_train_step(
                 model=model, loss_func=loss_func, optimizer=optimizer,
                 batch_size=train_batch_size, num_workers=num_workers,
                 lr=learning_rate, betas=betas,
             )
 
+            dgrad_list.append(client_dgrad)
+            ggard_list.append(client_ggrad)
             dweight_list.append(client_dweight)
             gweight_list.append(client_gweight)
             dloss_sum += client_dloss
-            gloss_sum += client_gloss 
-        
-            server.naive_aggregation(weight_list=dweight_list, type='d')
-            server.naive_aggregation(weight_list=gweight_list, type='g')
+            gloss_sum += client_gloss
 
+        ## server.adam_aggregation(gradient_list=dgrad_list, type='d', lr=learning_rate, betas=betas)
+        ## server.adam_aggregation(gradient_list=ggard_list, type='g', lr=learning_rate, betas=betas)
+        server.naive_aggregation(weight_list=dweight_list, type='d')
+        server.naive_aggregation(weight_list=gweight_list, type='g')
         print("epoch: [%d/%d] | d_loss: %.3f | g_loss: %.3f"%(epoch, total_rounds, dloss_sum/len(sel_clients), gloss_sum/len(sel_clients)))
 
+    ### Federated Training TYPE 2 ###
+    # for epoch in range(1, total_rounds + 1):
+    #     sel_clients = sample(range(num_client), int(client_sel_ratio * num_client))
+
+    #     for train_type in ('d', 'g'):
+    #         weight_list, grad_list, loss_sum = [], [], 0.
+    #         for cid, client in enumerate(clients):
+    #             if cid not in sel_clients:
+    #                 continue
+            
+    #             client.set_weights(server.get_weights())
+
+    #             client_weight, client_grad, client_loss = client.local_train_step_by_type(
+    #                 train_type=train_type,
+    #                 model=model, loss_func=loss_func, optimizer=optimizer,
+    #                 batch_size=train_batch_size, num_workers=num_workers,
+    #                 lr=learning_rate, betas=betas,
+    #             )
+
+    #             weight_list.append(client_weight)
+    #             grad_list.append(client_grad)
+    #             loss_sum += client_loss
+            
+    #         if train_type == 'd':
+    #             dloss_avg = loss_sum / len(sel_clients)
+    #         else:
+    #             gloss_avg = loss_sum / len(sel_clients)
+    #         server.naive_aggregation(weight_list, type=train_type)
+    #         # server.adam_aggregation(gradient_list=grad_list, type=train_type, lr=learning_rate, betas=betas)
+    #     print("epoch: [%d/%d] | d_loss: %.3f | g_loss: %.3f"%(epoch, total_rounds, dloss_avg, gloss_avg))
+        
         # visualization
         intermediate_weights= server.get_weights()
         for layer, param in enumerate(model['g'].parameters(), 1):
@@ -140,55 +177,3 @@ if __name__ == '__main__':
     
     tensor2img.toGIF(path, remove_cache=True, gif_name="federated", fps=1, loop=1)
     ########################################################################################################
-
-    # for epoch in range(1, total_rounds + 1):
-    #     sel_clients = sample(range(num_client), int(client_sel_ratio * num_client))
-
-    #     weight_list = []
-    #     # collaboratively train discriminator
-    #     for cid, client in enumerate(clients):
-    #         if cid not in sel_clients:
-    #             continue
-            
-    #         client.set_weights(server.get_weights())
-
-    #         client_weight, client_dloss = client.local_train_step(
-    #             train_type='d', 
-    #             model=model, loss_func=loss_func, optimizer=optimizer,
-    #             batch_size=train_batch_size, num_workers=num_workers, lr=learning_rate,
-    #         )
-
-    #         weight_list.append(client_weight)
-        
-    #     agg_weights = server.naive_aggregation(weight_list=weight_list, type='d')
-        
-    #     weight_list = []
-    #     # collaboratively train generator
-    #     for cid, client in enumerate(clients):
-    #         if cid not in sel_clients:
-    #             continue
-            
-    #         client.set_weights(server.get_weights())
-
-    #         client_weight, client_gloss = client.local_train_step(
-    #             train_type='g', 
-    #             model=model, loss_func=loss_func, optimizer=optimizer,
-    #             batch_size=train_batch_size, num_workers=num_workers, lr=learning_rate,
-    #         )
-
-    #         weight_list.append(client_weight)
-        
-    #     agg_weights = server.naive_aggregation(weight_list=weight_list, type='g')
-
-    #     print("epoch: [%d/%d] | d_loss: %.3f | g_loss: %.3f"%(epoch, total_rounds, client_dloss, client_gloss))
-
-    #     # visualization
-    #     if epoch % 20 == 0:
-    #         intermediate_weights= server.get_weights()
-    #         for layer, param in enumerate(model['g'].parameters(), 1):
-    #             param.data = torch.tensor(intermediate_weights['g'][model_structure['g'][layer-1]:model_structure['g'][layer]]).view(param.data.size())
-    #         with torch.no_grad():
-    #             model['g'] = model['g'].to(device)
-    #             gen_samples = model['g'](fixed_noise)
-    #         img = tensor2img.convert(gen_samples, gen_samples.shape[0], 10)
-    #         img.save(path + f"epoch_{epoch}.png")

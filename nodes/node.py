@@ -44,7 +44,7 @@ class GenNode:
     def __init__(self, model_structure: Dict[str, List[int]]) -> None:
         self.model_structure: Dict[str, List[int]] = model_structure
         self.weights: Dict[str, List[float]] = {'d': [], 'g': []}
-        self.gradients: Dict[str, List[float]] = {'d': [0 for _ in range(self.model_structure[-1])], 'g': [0 for _ in range(self.model_structure[-1])]}
+        self.gradients: Dict[str, List[float]] = {'d': [], 'g': []}
 
     def get_weights(self, type: Optional[str]=None) -> Union[Dict[str, List[float]], List[float]]:
         if type is None:

@@ -60,7 +60,7 @@ class TensorToImage:
         self._mode_ = mode
         self.__toPILImage__ = ToPILImage(mode=self._mode_)
 
-    def convert(self, tensor: Tensor, n_samples: int = 30, n_rows: int = 6) -> Image:
+    def convert(self, tensor: Tensor, n_samples: int = 30, n_rows: int = 6) -> Image.Image:
         image_tensor = tensor if tensor.device.type == 'cpu' else tensor.detach().cpu()
         image_tensor = image_tensor.view(-1, *self._image_size_)[:n_samples]
         image_grid = make_grid(image_tensor, nrow=n_rows).squeeze()
