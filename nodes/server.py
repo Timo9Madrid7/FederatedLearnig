@@ -26,6 +26,14 @@ class GenServer(GenNode):
         self.weights[type] = weight_list.mean(0).data.tolist()
         return self.weights[type]
     
+    def weighted_aggregation(self, weight_list: List[List[float]], coef_list: List[float], type: str, softmax: bool=False) -> List[float]:
+        weight_list : torch.Tensor = torch.tensor(weight_list, dtype=torch.float32, requires_grad=False)
+        coef_list: torch.Tensor =  torch.tensor(coef_list, dtype=torch.float32, requires_grad=False)
+        if softmax:
+            coef_list = torch.softmax(coef_list, dim=0)
+        self.weights[type] = weight_list.T.matmul(coef_list).data.tolist()
+        return self.weights[type]
+    
     def adam_aggregation(self, gradient_list: List[List[float]], type: str, lr: float=0.001, betas: Tuple[float, float]=(0.9, 0.999), eps: float=1e-8) -> List[float]:
         self._t_[type] += 1
         # get gradients

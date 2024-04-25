@@ -121,8 +121,8 @@ if __name__ == '__main__':
                 lr=learning_rate, betas=betas,
             )
 
-            dgrad_list.append(client_dgrad)
-            ggard_list.append(client_ggrad)
+            # dgrad_list.append(client_dgrad)
+            # ggard_list.append(client_ggrad)
             dweight_list.append(client_dweight)
             gweight_list.append(client_gweight)
             dloss_sum += client_dloss
