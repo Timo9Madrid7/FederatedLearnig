@@ -25,7 +25,7 @@ num_sample_per_client = 512
 non_iid_ratio = 0.1
 client_sel_ratio = 0.4
 
-total_rounds = 40
+total_rounds = 30
 local_rounds = 1
 train_batch_size = 64
 learning_rate = 0.0002
