@@ -67,3 +67,7 @@ class GenNode:
             self.gradients = gradients.copy()
         else:
             self.gradients[type] = gradients.copy()
+
+    def reset_all(self):
+        self.weights: Dict[str, List[float]] = {'d': [], 'g': []}
+        self.gradients: Dict[str, List[float]] = {'d': [], 'g': []}
